@@ -3,6 +3,7 @@
 #include <fstream>
 #include <string>
 #include <array>
+#include <algorithm>
 
 using namespace std;
 
