@@ -6,5 +6,5 @@ Tuple.o: Tuple.cpp Tuple.hpp
 Tuple: Tuple.o
 	$(CC) Tuple.o -o Tuple
 
-Database: Database.cpp
-	$(CC) Database.cpp -o Database
+Relation: Relation.cpp
+	$(CC) Relation.cpp -o Relation
