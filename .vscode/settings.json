@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "*.ml": "ocaml",
+        "*.mli": "ocaml",
+        "string": "cpp",
+        "vector": "cpp",
+        "iostream": "cpp",
+        "array": "cpp"
+    }
+}
