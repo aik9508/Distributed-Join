@@ -62,13 +62,8 @@ int main(int argc, char **argv)
     const int root = 0;
     int numtasks, taskid;
     MPI_Status status;
-    int *permu1;
-    int *permu2;
-    int arity1;
-    int arity2;
-    int loc_count1;
-    int loc_count2;
-    int nj;
+    int *permu1, *permu2;
+    int arity1,arity2,loc_count1,loc_count2,nj;
     vector<vector<int> > v1;
     vector<vector<int> > v2;
 
@@ -117,7 +112,7 @@ int main(int argc, char **argv)
             MPI_Send(distr1[i].data(), count1, MPI_INT, i, i, MPI_COMM_WORLD);
             MPI_Send(distr2[i].data(), count2, MPI_INT, i, i, MPI_COMM_WORLD);
         }
-        printf("data analyzed by root : (v1_size:%lu v2_size:%lu)...\n", v1.size(), v2.size());
+        printf("data analyzed by root : (v1_size:%lu v2_size:%lu)...\n", v1.size()*arity1, v2.size()*arity2);
     }else{
         MPI_Bcast(&arity1, 1, MPI_INT, root, MPI_COMM_WORLD);
         MPI_Bcast(&arity2, 1, MPI_INT, root, MPI_COMM_WORLD);
@@ -141,7 +136,6 @@ int main(int argc, char **argv)
     Relation loc_r2(arity2, v2);
     Relation res = Relation::join(loc_r1,loc_r2,permu1,permu2,nj,true);
     printf("node%d finished joining...\n",taskid);
-    cout << res << endl;
     vector<int> v_joined = flatten_vector(res.dataptr);
     int join_count = v_joined.size();
     int recv_counts[numtasks];
