@@ -83,7 +83,7 @@ Relation Relation::join(Relation &r1, Relation &r2, int *permu1, int *permu2, in
 void Relation::getData(string filename)
 {
     ifstream file;
-    file.open(filename);
+    file.open(filename.c_str());
     if (!file.is_open())
         return;
     unsigned int h;
