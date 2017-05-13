@@ -16,7 +16,13 @@ test2:
 	mpirun -np 4 Distr_join "../data/data1.txt" "../data/data2.txt"
 
 test3:
-	mpirun -np 4 Distr_join "../data/dblp.dat" "../data/dblp.dat"
+	mpirun -np 8 Distr_join "../data/dblp.dat" "../data/dblp.dat"
+
+test4:
+	mpirun -np 4 Distr_join "../data/data3.txt" "../data/data3.txt"
+
+create_data: create_data.cpp
+	$(CC) create_data.cpp -o create_data
 
 clean:
-	rm -f Distr_join *.o
+	rm -f Distr_join create_data Distr_join *.o

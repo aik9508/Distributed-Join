@@ -105,7 +105,7 @@ int main(int argc, char **argv)
         arity2 = 2;
         nj = 1;
         Relation r1(arity1, file1);
-        Relation r2(arity2, file2);
+        Relation r2 = r1;
         send_displ1 = new int[numtasks];
         send_displ2 = new int[numtasks];
         send_counts1 = new int[numtasks];
