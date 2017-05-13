@@ -17,3 +17,6 @@ test2:
 
 test3:
 	mpirun -np 8 Distr_join "../data/dblp.dat" "../data/dblp.dat"
+
+clean:
+	rm -f Distr_join *.o
