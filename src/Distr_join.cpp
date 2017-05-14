@@ -106,7 +106,6 @@ int main(int argc, char **argv) {
     nj = 1;
     Relation r1(file1);
     Relation r2 = file1==file2 ? r1 : Relation(file2);
-    cout << r2.get_arity() << " " << r2.size() << endl;
     send_displ1 = new int[numtasks];
     send_displ2 = new int[numtasks];
     send_counts1 = new int[numtasks];
