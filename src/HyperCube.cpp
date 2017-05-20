@@ -148,8 +148,8 @@ int main(int argc, char **argv) {
   Relation loc_r1(loc_v[0]);
   Relation loc_r2(loc_v[1]);
   Relation loc_r3(loc_v[2]);
-  Relation res_interm = Relation::join(loc_r1, loc_r2, permu1, permu2, 1, true, NONE);
-  Relation res = Relation::join(res_interm,loc_r3,permu3,permu2,2,true,TRIANGLE);
+  Relation res_interm(loc_r1, loc_r2, permu1, permu2, 1, true, NONE);
+  Relation res(res_interm,loc_r3,permu3,permu2,2,true,TRIANGLE);
   printf("node%d finished joining and found %d joins...\n", taskid, res.size());
   vector<int> v_joined = flatten_vector(res.dataptr);
   int join_count = v_joined.size();

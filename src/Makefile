@@ -12,6 +12,12 @@ HyperCube.o: Relation.hpp Relation.cpp
 HyperCube: HyperCube.o HyperCube.cpp
 	mpic++ HyperCube.o HyperCube.cpp -o HyperCube
 
+Multi_join.o: Relation.hpp Relation.cpp
+	mpic++ -c Relation.cpp -o Multi_join.o
+
+Multi_join: Multi_join.o Multi_join.cpp
+	mpic++ Multi_join.o Multi_join.cpp -o Multi_join
+
 test_sequential.o: Relation.hpp Relation.cpp
 	$(CC) -c Relation.cpp -o test_sequential.o
 
@@ -29,6 +35,12 @@ test3:
 
 test4:
 	mpirun -np 4 Distr_join "../data/data3.txt" "../data/data3.txt"
+
+test5:
+	mpirun -np 1 Multi_join 3 4 "../data/data1.txt" 2 0 1 "../data/data2.txt" 2 1 2 "../data/data2.txt" 2 2 3
+
+test6:
+	mpirun -np 4 Multi_join 3 3 "../data/facebook.dat" 2 0 1 "../data/facebook.dat" 2 1 2 "../data/facebook.dat" 2 2 0
 
 hypercube_test:
 	mpirun -np 8 HyperCube "../data/dblp.dat"

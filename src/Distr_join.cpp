@@ -146,7 +146,7 @@ int main(int argc, char **argv) {
   reconstruct_loc_vector(v2, loc_data2, loc_count2, arity2);
   Relation loc_r1(v1);
   Relation loc_r2(v2);
-  Relation res = Relation::join(loc_r1, loc_r2, permu1, permu2, nj, true, NONE);
+  Relation res(loc_r1, loc_r2, permu1, permu2, nj, true, NONE);
   printf("node%d finished joining and found %d joins...\n", taskid, res.size());
   vector<int> v_joined = flatten_vector(res.dataptr);
   int join_count = v_joined.size();

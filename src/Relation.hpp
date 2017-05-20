@@ -29,6 +29,9 @@ class Relation {
   */
   Relation(vector<vector<int> > &data);
 
+  Relation(Relation &r1, Relation &r2, int *permu1, int *permu2,
+                        int nj, bool asc, int constraint);
+
   ~Relation();
 
   int get_arity() const;
@@ -40,9 +43,6 @@ class Relation {
   * descendingly if asc is false.
   */
   void sort_data(int *permu, bool asc);
-
-  static Relation join(Relation &r1, Relation &r2, int *permu1, int *permu2,
-                       int nj, bool asc, int constraint);
 
  private:
   int arity;

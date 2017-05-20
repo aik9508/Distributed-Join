@@ -48,7 +48,7 @@ void Relation::sort_data(int *permu, bool asc)
   sort(dataptr.begin(), dataptr.end(), compare_func);
 }
 
-Relation Relation::join(Relation &r1, Relation &r2, int *permu1, int *permu2,
+Relation::Relation(Relation &r1, Relation &r2, int *permu1, int *permu2,
                         int nj, bool asc, int constraint)
 {
   r1.sort_data(permu1, asc);
@@ -109,8 +109,9 @@ Relation Relation::join(Relation &r1, Relation &r2, int *permu1, int *permu2,
       it1++;
     }
   }
-  int arity = r1.get_arity() + r2.get_arity() - nj;
-  return Relation(newdata);
+  data=newdata;
+  arity = data.empty() ? 0 : data[0].size();
+  getPtrData();
 }
 
 int Relation::getData(string filename)
