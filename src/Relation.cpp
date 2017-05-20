@@ -49,7 +49,7 @@ void Relation::sort_data(int *permu, bool asc)
 }
 
 Relation Relation::join(Relation &r1, Relation &r2, int *permu1, int *permu2,
-                        int nj, bool asc)
+                        int nj, bool asc, int constraint)
 {
   r1.sort_data(permu1, asc);
   r2.sort_data(permu2, asc);
@@ -83,6 +83,16 @@ Relation Relation::join(Relation &r1, Relation &r2, int *permu1, int *permu2,
           for (unsigned int k = nj; k < a2; k++)
           {
             v.push_back((*(it2 - j))->at(permu2[k]));
+          }
+          if(constraint == TRIANGLE){
+            bool b = true;
+            for(unsigned int i =0 ;i<v.size()-1;i++){
+              if(v[i]>v[i+1]){
+                b=false;
+                break;
+              }
+            }
+            if(!b) continue;
           }
           newdata.push_back(v);
         }
@@ -184,28 +194,3 @@ std::ostream &operator<<(std::ostream &s, const Relation &d)
   }
   return s;
 }
-
-// int main() {
-// string filename = "../data/dblp.dat";
-// Relation d(filename);
-// cout << d << endl;
-// int permu[] = {0, 1};
-// vector<int> v1;
-// v1.push_back(1);
-// v1.push_back(2);
-// vector<int> v2;
-// v2.push_back(1);
-// v2.push_back(3);
-// d.sort_data(permu, false);
-// cout << d << endl;
-// Relation r1("../data/data1.txt");
-// Relation r2("../data/data2.txt");
-// cout << r1.get_arity() << endl;
-// cout << r1.size() << endl;
-// cout << r1 << endl << endl;
-// int permu1[] = {1, 0};
-// int permu2[] = {0, 1};
-// int nj = 1;
-// Relation r3 = Relation::join(r1, r2, permu1, permu2, nj, true);
-// cout << r3 << endl;
-// }

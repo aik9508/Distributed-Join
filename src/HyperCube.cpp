@@ -2,6 +2,10 @@
 #include "Relation.hpp"
 #include "mpi.h"
 
+int mpi_hash(int i){
+    return i*2654435761 % 2^32;
+}
+
 vector<int> flatten_vector(vector<vector<int> *> &v0) {
   vector<int> v;
   for (vector<vector<int> *>::iterator it = v0.begin(); it != v0.end(); it++) {
@@ -12,26 +16,43 @@ vector<int> flatten_vector(vector<vector<int> *> &v0) {
   return v;
 }
 
-vector<vector<vector<int> *> > distribute_vector(Relation &rel,
-                                                 int const numtasks,
-                                                 int *permu) {
+vector<vector<vector<int> *> > distribute_vector(Relation &rel, int const numtasks, int* m, int *pos) {
   vector<vector<vector<int> *> > distr;
+  int weight[3] = {1,m[0],m[0]*m[1]};
+  int var_pos;
+  int invar_pos[2];
+  int ind = 0;
+  for(unsigned int i = 0; i<3; i++){
+      if(pos[i]==-1) {var_pos= i;}
+      else {invar_pos[ind++] = i;}
+  }
   for (unsigned int i = 0; i < numtasks; i++) {
     vector<vector<int> *> tmp;
     distr.push_back(tmp);
   }
   for (vector<vector<int> *>::iterator it = rel.dataptr.begin();
        it != rel.dataptr.end(); it++) {
-    int dest = (*it)->at(permu[0]) % numtasks;
-    distr[dest].push_back(*it);
+    int p[3];
+    int dest = 0;
+    p[var_pos] = 0;
+    for(unsigned int i = 0; i<2 ;i++){
+        p[invar_pos[i]]=mpi_hash((*it)->at(i))%m[invar_pos[i]];
+    }
+    for(unsigned int i = 0; i<3 ;i++){
+        dest += p[i]*weight[i];
+    }
+    for(unsigned int i = 0 ;i<m[var_pos];i++){
+        distr[dest].push_back(*it);
+        dest+=weight[var_pos];
+    }
   }
   return distr;
 }
 
 void get_scatter_v(Relation &rel, vector<int> &scatter_v, int const numtasks,
-                   int const arity, int *permu, int *displ, int *send_counts) {
+                   int const arity,int* m, int *pos, int *displ, int *send_counts) {
   vector<vector<vector<int> *> > distr =
-      distribute_vector(rel, numtasks, permu);
+      distribute_vector(rel, numtasks, m, pos);
   for (unsigned int i = 0; i < numtasks; i++) {
     send_counts[i] = distr[i].size() * arity;
     for (unsigned int j = 0; j < distr[i].size(); j++) {
@@ -52,12 +73,9 @@ void reconstruct_loc_vector(vector<vector<int> > &v, int *loc_data,
     vector<int> current_vector;
     for (unsigned int j = 0; j < arity; j++) {
       current_vector.push_back(loc_data[i + j]);
-      // cout << loc_data[i * arity + j] << " ";
     }
-    // cout << endl;
     v.push_back(current_vector);
   }
-  // cout << endl;
 }
 
 void print_vector(vector<int> v) {
@@ -77,76 +95,61 @@ void print_array(int *v, int sz) {
 int main(int argc, char **argv) {
   const int root = 0;
   int numtasks, taskid;
-  MPI_Status status;
-  int *permu1, *permu2, *send_displ1, *send_displ2, *send_counts1,
-      *send_counts2;
-  int arity1, arity2, loc_count1, loc_count2, nj;
-  vector<vector<int> > v1;
-  vector<vector<int> > v2;
-  vector<int> scatter_v1;
-  vector<int> scatter_v2;
+  int ** send_displ, **send_count;
+  int ** loc_data = new int*[3];
+  int loc_count[3];
+  int permu1[2] = {1,0};
+  int permu2[2] = {0,1};
+  int permu3[3] = {0,2,1};
+  vector<vector<int> > scatter_v;
+  vector<vector<vector<int> > > loc_v;
 
   MPI_Init(&argc, &argv);
   MPI_Comm_rank(MPI_COMM_WORLD, &taskid);
   MPI_Comm_size(MPI_COMM_WORLD, &numtasks);
   clock_t begin;
-  if (taskid == root) {
+   if (taskid == root) {
     begin = clock();
     cout << "[0.0000] the root task begins to construct inital data" << endl;
-    string const file1 = argv[1];
-    string const file2 = argv[2];
-    permu1 = new int[2];
-    permu2 = new int[2];
-    permu1[0] = 1;
-    permu1[1] = 0;
-    permu2[0] = 0;
-    permu2[1] = 1;
-    arity1 = 2;
-    arity2 = 2;
-    nj = 1;
-    Relation r1(file1);
-    Relation r2 = file1==file2 ? r1 : Relation(file2);
-    send_displ1 = new int[numtasks];
-    send_displ2 = new int[numtasks];
-    send_counts1 = new int[numtasks];
-    send_counts2 = new int[numtasks];
+    string const file = argv[1];
+    Relation r1(file);
+    int m[3] = {2,2,2};
+    int pos[3][3] = {{1,0,-1},{-1,0,1},{0,-1,1}};
+    send_displ = new int*[3];
+    send_count = new int*[3];
     printf("[%6.4f]construct scatter vector...\n",
            (double)(clock() - begin) / CLOCKS_PER_SEC);
-    get_scatter_v(r1, scatter_v1, numtasks, arity1, permu1, send_displ1,
-                  send_counts1);
-    get_scatter_v(r2, scatter_v2, numtasks, arity2, permu2, send_displ2,
-                  send_counts2);
-    printf("[%6.4f]broadcast parameters...\n",
-           (double)(clock() - begin) / CLOCKS_PER_SEC);
+    for(unsigned int i = 0; i<3;i++){
+        send_displ[i] = new int[numtasks];
+        send_count[i] = new int[numtasks];
+        vector<int> tmp;
+        scatter_v.push_back(tmp);
+        get_scatter_v(r1,scatter_v[i],numtasks,2,m,pos[i],send_displ[i],send_count[i]);
+        print_array(send_count[i],numtasks); 
+    }
+    printf("[%6.4f]scatter data...\n",(double)(clock() - begin) / CLOCKS_PER_SEC);
   }
-  MPI_Bcast(&arity1, 1, MPI_INT, root, MPI_COMM_WORLD);
-  MPI_Bcast(&arity2, 1, MPI_INT, root, MPI_COMM_WORLD);
-  if (taskid != root) {
-    permu1 = new int[arity1];
-    permu2 = new int[arity2];
+  for(unsigned int i = 0; i<3; i++){
+    MPI_Scatter(taskid == root ? send_count[i]:NULL,1,MPI_INT, &(loc_count[i]),1,MPI_INT,root, MPI_COMM_WORLD);
+    loc_data[i]=new int[loc_count[i]];
   }
-  MPI_Bcast(permu1, arity1, MPI_INT, root, MPI_COMM_WORLD);
-  MPI_Bcast(permu2, arity2, MPI_INT, root, MPI_COMM_WORLD);
-  MPI_Bcast(&nj, 1, MPI_INT, root, MPI_COMM_WORLD);
-  if (taskid == root)
-    printf("[%6.4f]scatter data...\n",
-           (double)(clock() - begin) / CLOCKS_PER_SEC);
-  MPI_Scatter(send_counts1, 1, MPI_INT, &loc_count1, 1, MPI_INT, root,
-              MPI_COMM_WORLD);
-  MPI_Scatter(send_counts2, 1, MPI_INT, &loc_count2, 1, MPI_INT, root,
-              MPI_COMM_WORLD);
-  int loc_data1[loc_count1];
-  int loc_data2[loc_count2];
-  MPI_Scatterv(scatter_v1.data(), send_counts1, send_displ1, MPI_INT, loc_data1,
-               loc_count1, MPI_INT, root, MPI_COMM_WORLD);
-  MPI_Scatterv(scatter_v2.data(), send_counts2, send_displ2, MPI_INT, loc_data2,
-               loc_count2, MPI_INT, root, MPI_COMM_WORLD);
+   for(unsigned int i = 0 ; i<3 ;i++){
+         MPI_Scatterv(taskid==root ? scatter_v[i].data() :NULL, taskid==root ? send_count[i] : NULL, taskid==root? send_displ[i] : NULL, MPI_INT, loc_data[i],
+                 loc_count[i], MPI_INT, root, MPI_COMM_WORLD);
+   }
   printf("node%d starts to join...\n", taskid);
-  reconstruct_loc_vector(v1, loc_data1, loc_count1, arity1);
-  reconstruct_loc_vector(v2, loc_data2, loc_count2, arity2);
-  Relation loc_r1(v1);
-  Relation loc_r2(v2);
-  Relation res = Relation::join(loc_r1, loc_r2, permu1, permu2, nj, true, NONE);
+  for(unsigned int i = 0; i<3 ;i++){
+      vector<vector<int> > tmp;
+      loc_v.push_back(tmp);
+      reconstruct_loc_vector(loc_v[i],loc_data[i],loc_count[i],2);
+    //   cout << "array " << i << " of " << taskid << endl;
+    //   print_array(loc_data[i] , loc_count[i]);
+  }
+  Relation loc_r1(loc_v[0]);
+  Relation loc_r2(loc_v[1]);
+  Relation loc_r3(loc_v[2]);
+  Relation res_interm = Relation::join(loc_r1, loc_r2, permu1, permu2, 1, true, NONE);
+  Relation res = Relation::join(res_interm,loc_r3,permu3,permu2,2,true,TRIANGLE);
   printf("node%d finished joining and found %d joins...\n", taskid, res.size());
   vector<int> v_joined = flatten_vector(res.dataptr);
   int join_count = v_joined.size();
@@ -172,22 +175,25 @@ int main(int argc, char **argv) {
     printf("[%6.4f]vector gather finished...\n",
            (double)(clock() - begin) / CLOCKS_PER_SEC);
     vector<vector<int> > v_gather;
-    reconstruct_loc_vector(v_gather, array_gather, total_count,
-                           (arity1 + arity2 - nj));
+    reconstruct_loc_vector(v_gather, array_gather, total_count,3);
     Relation res_gather(v_gather);
-    printf("[%6.4f]final result:\n",
-           (double)(clock() - begin) / CLOCKS_PER_SEC);
+    printf("[%6.4f]final result (%lu joins) :\n",
+           (double)(clock() - begin) / CLOCKS_PER_SEC, v_gather.size());
     cout << res_gather << endl;
   }
-  delete[] permu1;
-  delete[] permu2;
+  for(unsigned int i =0 ;i<3;i++){
+      delete[] loc_data[i];
+  }
+  delete[] loc_data;
   if (taskid == root) {
     delete[] array_gather;
     delete[] displs;
-    delete[] send_displ1;
-    delete[] send_displ2;
-    delete[] send_counts1;
-    delete[] send_counts2;
+    for(unsigned int i =0 ;i<3;i++){
+      delete[] send_displ[i];
+      delete[] send_count[i];
+    }
+    delete[] send_displ;
+    delete[] send_count;
   }
   MPI_Finalize();
 }

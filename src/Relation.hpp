@@ -8,6 +8,9 @@
 #include <string>
 #include <vector>
 
+const int NONE = 0;
+const int TRIANGLE = 1;
+
 using namespace std;
 
 class Relation {
@@ -39,7 +42,7 @@ class Relation {
   void sort_data(int *permu, bool asc);
 
   static Relation join(Relation &r1, Relation &r2, int *permu1, int *permu2,
-                       int nj, bool asc);
+                       int nj, bool asc, int constraint);
 
  private:
   int arity;
