@@ -9,7 +9,9 @@
 #include <vector>
 
 const int NONE = 0;
-const int TRIANGLE = 1;
+const int FRIENDS = 1;
+const int TRIANGLE = 2;
+
 
 using namespace std;
 

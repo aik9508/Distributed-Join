@@ -3,6 +3,15 @@
 #include "Relation.hpp"
 #include "mpi.h"
 
+
+void print_array(int *v, int sz)
+{
+  for (int i = 0; i < sz; i++)
+  {
+    cout << v[i] << " ";
+  }
+  cout << endl;
+}
 /*
 * Transforms a 2-dimension vectro into 1-dimension.
 */
@@ -58,7 +67,6 @@ void get_scatter_v(Relation &rel, vector<int> &scatter_v, int const numtasks,
   int arity = rel.get_arity();
   if (rel.size() == 0)
     return;
-
   // Here produces 'std::out_of_range' error
   vector<vector<vector<int> *> > distr = distribute_vector(rel, numtasks, permu);
   for (unsigned int i = 0; i < numtasks; i++)
@@ -95,42 +103,41 @@ void reconstruct_loc_vector(vector<vector<int> > &v, int *loc_data,
   // cout << endl;
 }
 
-void print_array(int *v, int sz)
-{
-  for (int i = 0; i < sz; i++)
-  {
-    cout << v[i] << " ";
+void merge_tuples(int final_dim, int* src, int *tgt, int* &rst_tuple, int* &src_permu, int &src_l, 
+                  int* &tgt_permu, int &tgt_l, int & nj){
+  vector<int> src_comm_entries,src_only_entries,tgt_comm_entries,tgt_only_entries;
+  int src_ind = 0, tgt_ind = 0;
+  rst_tuple = new int[final_dim];
+  for(unsigned int i = 0; i<final_dim ;i++){
+    if(src[i]!=-1) src_ind++;
+    if(tgt[i]!=-1) tgt_ind++;
   }
-  cout << endl;
-}
-
-void merge_tuples(int final_dim, int* rst, int *tgt, int* &rst_permu, int &rst_l, 
-                  int* &tgt_permu, int & nj){
-  vector<int> rst_comm_entries,rst_only_entries,tgt_comm_entries,tgt_only_entries;
-  int rst_ind = 0, tgt_ind = 0;
+  int new_ind = src_ind;
   for(unsigned int i = 0; i<final_dim; i++){
-    if(rst[i]!=-1 && tgt[i]!=-1){
-      rst_comm_entries.push_back(rst_ind++);
-      tgt_comm_entries.push_back(tgt_ind++);
+    rst_tuple[i]=src[i];
+    if(src[i]!=-1 && tgt[i]!=-1){
+      src_comm_entries.push_back(src[i]);
+      tgt_comm_entries.push_back(tgt[i]);
     }
-    else if(rst[i]!=-1) {
-      rst_only_entries.push_back(rst_ind++);
+    else if(src[i]!=-1) {
+      src_only_entries.push_back(src[i]);
     }
     else if(tgt[i]!=-1) {
-      rst[i]=i;
-      tgt_only_entries.push_back(tgt_ind++);
+      rst_tuple[i]=new_ind++;
+      tgt_only_entries.push_back(tgt[i]);
     }
   }
-  nj = rst_comm_entries.size();
-  for(unsigned int i =0 ;i<rst_only_entries.size();i++)
-    rst_comm_entries.push_back(rst_only_entries[i]);
+  nj = src_comm_entries.size();
+  for(unsigned int i =0 ;i<src_only_entries.size();i++)
+    src_comm_entries.push_back(src_only_entries[i]);
   for(unsigned int i =0 ;i<tgt_only_entries.size();i++)
     tgt_comm_entries.push_back(tgt_only_entries[i]);
-  rst_l = rst_ind;
-  rst_permu = new int[rst_comm_entries.size()];
+  src_l = src_ind;
+  tgt_l = tgt_ind;
+  src_permu = new int[src_comm_entries.size()];
   tgt_permu = new int[tgt_comm_entries.size()];
-  for(unsigned int i = 0;i<rst_comm_entries.size();i++){
-    rst_permu[i]=rst_comm_entries[i];
+  for(unsigned int i = 0;i<src_comm_entries.size();i++){
+    src_permu[i]=src_comm_entries[i];
   }
   for(unsigned int i = 0;i<tgt_comm_entries.size();i++){
     tgt_permu[i]=tgt_comm_entries[i];
@@ -146,6 +153,12 @@ void print_vector(vector<int> v)
   cout << endl;
 }
 
+void delete_vector(vector<int*> v){
+  for(unsigned int i =0 ; i<v.size();i++){
+    delete[] v[i];
+  }
+}
+
 int main(int argc, char **argv)
 {
   const int root = 0;
@@ -154,37 +167,39 @@ int main(int argc, char **argv)
   int const num_files = atoi(argv[1]); // Numbers of relations to join
   int const final_dim = atoi(argv[2]); // Number of columns of final result
   vector<int *> tuples;                // vector of arrays of size final_dim
-  vector<int *> rslt_permus;           // read from arguments
-  vector<int *> inter_permus;
+  int** permus = new int*[2*num_files-2];
+  int *counts = new int[2*num_files-2];           
   int *arities = new int[num_files];
   int *njs = new int[num_files-1];
-  int *rslt_counts = new int[num_files];
-  int *local_counts = new int[num_files];
+  int *local_counts = new int[num_files-1];
+  int** join_order = new int*[num_files-1];
+  for(unsigned int i = 0 ;i<num_files-1;i++){
+    join_order[i]=new int[2];
+  }
   vector<int *> send_displs;
   vector<int *> send_counts;
   vector<vector<vector<int> > > vs;
   vector<vector<int> > scatter_vs;
-
+  for (unsigned int i = 0; i< num_files;i++){
+    vector<vector<int> > loc_v;
+      vs.push_back(loc_v);
+  }
   MPI_Init(&argc, &argv);
   MPI_Comm_rank(MPI_COMM_WORLD, &taskid);
   MPI_Comm_size(MPI_COMM_WORLD, &numtasks);
 
-  clock_t begin;
-  // cout << "num_files = " << num_files << endl;
-  for (unsigned int l = 0; l < num_files; l++)
-  {
-    vector<vector<int> > loc_v;
-    vs.push_back(loc_v);
-    int *tuple = new int[final_dim];
-    for (unsigned int k = 0; k < final_dim; k++)
-    { // Initialize tuples
-      tuple[k] = -1;
-    }
-    tuples.push_back(tuple);
-  }
-
+  clock_t begin = clock();
   if (taskid == root)
   {
+    for (unsigned int l = 0; l < num_files; l++)
+    {
+      int *tuple = new int[final_dim];
+      for (unsigned int k = 0; k < final_dim; k++)
+      { // Initialize tuples
+        tuple[k] = -1;
+      }
+      tuples.push_back(tuple);
+    }
     for (unsigned int l = 0; l < num_files; l++)
     {
       vector<int> scatter_v;
@@ -195,38 +210,53 @@ int main(int argc, char **argv)
       send_counts.push_back(send_count);
     }
     vector<Relation> relations;
-    begin = clock();
-    cout << "[0.0000] the root task begins to construct inital data" << endl;
+    printf("[%6.4f]the root process begins to construct inital data...\n",
+           (double)(clock() - begin) / CLOCKS_PER_SEC);
     // Create all relations from files and calculate arities and tuples
-    int index = 0;
-    for (unsigned int l = 3, index = 0; l < argc; index++)
-    {
-      Relation *r = new Relation(argv[l++]);
+    ifstream file;
+    file.open(argv[3]);
+    if(!file.is_open()){
+      cout << "No such file!" << endl;
+      exit(2);
+    }
+    for(unsigned int i =0 ;i<num_files-1;i++){
+      file >> join_order[i][0];
+      file >> join_order[i][1]; 
+    }
+    string files[num_files];
+    for(unsigned int i = 0; i<num_files;i++){
+      string relationfile;
+      file >> relationfile;
+      files[i]=relationfile;
+      bool b = false;
+      Relation *r;
+      for(unsigned int j = 0 ; j< i ;j++){
+        if(relationfile == files[j]){
+          r=&(relations[j]);
+          b=true;
+          break;
+        }
+      }
+      if(!b) r = new Relation(relationfile);
       relations.push_back(*r);
-      arities[index] = atoi(argv[l++]);
-      for (unsigned int k = 0; k < arities[index]; k++)
-      {
-        int entry = atoi(argv[l++]);
-        tuples[index][entry] = k;
+      file >> arities[i];
+      for (unsigned int k = 0; k<arities[i];k++){
+        int index;
+        file >> index;
+        tuples[i][index] = k;
       }
     }
+    file.close();
 
     // calculate all permutations of each step
-    int rst_tuple[final_dim];
-    for(unsigned int i = 0; i<final_dim;i++){
-      rst_tuple[i]=tuples[0][i];
-    }
     for (unsigned int i = 0; i < num_files-1; i++)
     {
-      int *inter_permu;
-      int *rst_permu;
-      merge_tuples(final_dim, rst_tuple, tuples[i+1], rst_permu, rslt_counts[i],
-                   inter_permu, njs[i]);
-      rslt_permus.push_back(rst_permu);
-      print_array(rst_tuple,final_dim);
-      print_array(rst_permu,i+2);
-      print_array(inter_permu,2);
-      inter_permus.push_back(inter_permu);
+      int *rst_tuple;
+      int src = join_order[i][0];
+      int tgt = join_order[i][1];
+      merge_tuples(final_dim, tuples[src], tuples[tgt], rst_tuple, permus[src], counts[src],
+                   permus[tgt], counts[tgt], njs[i]);
+      tuples.push_back(rst_tuple);
     }
 
     printf("[%6.4f]construct scatter vector...\n",
@@ -234,8 +264,8 @@ int main(int argc, char **argv)
 
     for (unsigned int l = 0; l < num_files; l++)
     {
-      get_scatter_v(relations.at(l), scatter_vs.at(l), numtasks,
-                    l==0 ? rslt_permus[0]:inter_permus.at(l-1), send_displs.at(l), send_counts.at(l));
+      get_scatter_v(relations[l], scatter_vs[l], numtasks,
+                    permus[l], send_displs[l], send_counts[l]);
     }
     printf("[%6.4f]broadcast parameters...\n",
            (double)(clock() - begin) / CLOCKS_PER_SEC);
@@ -244,15 +274,12 @@ int main(int argc, char **argv)
   // Distribute tasks to different nodes
   MPI_Bcast(arities, num_files, MPI_INT, root, MPI_COMM_WORLD);
   MPI_Bcast(njs, num_files-1, MPI_INT, root, MPI_COMM_WORLD);
-  MPI_Bcast(rslt_counts, num_files-1, MPI_INT, root, MPI_COMM_WORLD);
+  MPI_Bcast(counts, 2*num_files-2, MPI_INT, root, MPI_COMM_WORLD);
   if (taskid != root)
   {
-    for (unsigned int i = 0; i < num_files-1; i++)
+    for (unsigned int i = 0; i < 2*num_files-2; i++)
     {
-      int *inter_permu = new int[arities[i+1]];
-      int *rslt_permu = new int[rslt_counts[i]];
-      rslt_permus.push_back(rslt_permu);
-      inter_permus.push_back(inter_permu);
+      permus[i] = new int[counts[i]];
     }
   }
   if (taskid == root)
@@ -262,8 +289,10 @@ int main(int argc, char **argv)
   }
   for (unsigned int i = 0; i < num_files-1; i++)
   {
-    MPI_Bcast(rslt_permus[i], rslt_counts[i], MPI_INT, root, MPI_COMM_WORLD);
-    MPI_Bcast(inter_permus[i], arities[i+1], MPI_INT, root, MPI_COMM_WORLD);
+    MPI_Bcast(join_order[i],2,MPI_INT,root,MPI_COMM_WORLD);
+  }
+  for(unsigned int i =0 ;i<2*num_files-2;i++){
+    MPI_Bcast(permus[i], counts[i], MPI_INT, root, MPI_COMM_WORLD);
   }
 
   if (taskid == root)
@@ -298,11 +327,10 @@ int main(int argc, char **argv)
     }
   }
   // Unitl now, all processors have received all files' data needed
-
-  printf("node%d starts to join...\n", taskid);
-
+  printf("[%6.4f]node%d starts to join......\n",
+           (double)(clock() - begin) / CLOCKS_PER_SEC, taskid);
   // Local treatments
-  Relation *loc_relations[num_files];
+  Relation *loc_relations[num_files*2-2];
   for (unsigned int l = 0; l < num_files; l++)
   {
     reconstruct_loc_vector(vs[l], local_datas[l], local_counts[l], arities[l]);
@@ -310,32 +338,54 @@ int main(int argc, char **argv)
   }
 
   Relation *res = loc_relations[0];
-  vector<vector<int> > v_inter;
-  vector<int> scatter_v_inter;
+  vector<vector<vector<int> > > v_inters;
+  vector<vector<int> >scatter_v_inters;
+  for(unsigned int i = 0; i<num_files-1;i++){
+    vector<int> sv_inter;
+    vector<vector<int> > v_inter;
+    v_inters.push_back(v_inter);
+    scatter_v_inters.push_back(sv_inter);
+  }
   int loc_count_inter;
   int recv_count_inter[numtasks], recv_displ_inter[numtasks],
       send_displ_inter[numtasks], send_count_inter[numtasks];
   for(unsigned int i =0 ;i<num_files-1;i++){
+    int src=join_order[i][0];
+    int tgt=join_order[i][1];
+    printf ("[%6.4f]node%d join %d\n",(double)(clock() - begin) / CLOCKS_PER_SEC, taskid, i);
     if(i==num_files-2) {
-      res = new Relation(*res, *(loc_relations[i+1]), rslt_permus[i],
-                                            inter_permus[i], njs[i], true, TRIANGLE);
+      res = new Relation(*(loc_relations[src]), *(loc_relations[tgt]),
+                         permus[src],permus[tgt], njs[i], true, TRIANGLE);
+      delete loc_relations[src];
+      delete loc_relations[tgt];
       break;
     }else{
-      res = new Relation(*res, *(loc_relations[i+1]), rslt_permus[i],
-                                            inter_permus[i], njs[i], true, NONE);
+      res = new Relation(*(loc_relations[src]), *(loc_relations[tgt]),
+                         permus[src],permus[tgt], njs[i], true, FRIENDS);
     }
-    get_scatter_v(*(res), scatter_v_inter, numtasks, rslt_permus[i+1],
+    delete loc_relations[src];
+    delete loc_relations[tgt];
+    printf ("[%6.4f]node%d join %d get_scatter_v\n",(double)(clock() - begin) / CLOCKS_PER_SEC, taskid, i);
+    get_scatter_v(*(res), scatter_v_inters[i], numtasks, permus[i+num_files],
                   send_displ_inter, send_count_inter);
+    printf ("[%6.4f]node%d join %d All to all communication starts\n",(double)(clock() - begin) / CLOCKS_PER_SEC, taskid, i);
     MPI_Alltoall(send_count_inter,1,MPI_INT, recv_count_inter,1,MPI_INT,MPI_COMM_WORLD);
+    printf ("[%6.4f]node%d join %d All to all communication finished\n",(double)(clock() - begin) / CLOCKS_PER_SEC, taskid, i);
     count_to_displ(recv_count_inter, recv_displ_inter, numtasks);
     loc_count_inter = recv_displ_inter[numtasks - 1] + recv_count_inter[numtasks - 1];
-    int loc_data_inter[loc_count_inter];
-    MPI_Alltoallv(scatter_v_inter.data(), send_count_inter, send_displ_inter, MPI_INT,
+    int* loc_data_inter = new int[loc_count_inter];
+    printf ("[%6.4f]node%d join %d All to all v communication\n",(double)(clock() - begin) / CLOCKS_PER_SEC, taskid, i);
+    MPI_Alltoallv(scatter_v_inters[i].data(), send_count_inter, send_displ_inter, MPI_INT,
                   loc_data_inter, recv_count_inter, recv_displ_inter, MPI_INT, MPI_COMM_WORLD);
-    reconstruct_loc_vector(v_inter, loc_data_inter, loc_count_inter, rslt_counts[i+1]);
-    res = new Relation(v_inter);
+    printf ("[%6.4f]node%d join %d reconstruct the vector\n",(double)(clock() - begin) / CLOCKS_PER_SEC, taskid, i);
+    reconstruct_loc_vector(v_inters[i], loc_data_inter, loc_count_inter, counts[i+num_files]);
+    delete[] loc_data_inter;
+    printf ("[%6.4f]node%d join %d reconstruction is finished\n",(double)(clock() - begin) / CLOCKS_PER_SEC, taskid, i);
+    res = new Relation(v_inters[i]);
+    printf ("[%6.4f]node%d join %d found %d intermediate results\n",(double)(clock() - begin) / CLOCKS_PER_SEC, taskid, i, res->size());
+    loc_relations[num_files+i]=res;
   }
-  printf("node%d finished joining and found %d joins...\n", taskid, res->size());
+  printf("[%6.4f]node%d finished joining and found %d joins...\n",(double)(clock() - begin) / CLOCKS_PER_SEC, taskid, res->size());
   vector<int> v_joined = flatten_vector(res->dataptr);
   int join_count = v_joined.size();
   int recv_counts[numtasks];
@@ -369,5 +419,23 @@ int main(int argc, char **argv)
            (double)(clock() - begin) / CLOCKS_PER_SEC, v_gather.size());
     cout << res_gather << endl;
   }
+  delete[] arities;
+  delete[] njs;
+  delete[] counts;
+  delete[] local_counts;
+  for(unsigned int i = 0 ;i<num_files-1;i++){
+    delete[] join_order[i];
+    delete[] permus[i];
+    delete[] permus[i+num_files-1];
+  }
+  delete[] permus;
+  delete[] join_order;
+  if(taskid==root){
+    delete[] displs;
+    delete[] array_gather;
+    delete_vector(tuples);
+  }
+  delete_vector(send_displs);
+  delete_vector(send_counts);
   MPI_Finalize();
 }

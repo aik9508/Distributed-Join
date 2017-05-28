@@ -36,7 +36,10 @@ Relation::Relation(vector<vector<int> > &data) : data(data)
   getPtrData();
 }
 
-Relation::~Relation() {}
+Relation::~Relation() {
+  dataptr.clear();
+  data.clear();
+}
 
 int Relation::get_arity() const { return arity; }
 
@@ -55,6 +58,9 @@ Relation::Relation(Relation &r1, Relation &r2, int *permu1, int *permu2,
   r2.sort_data(permu2, asc);
   int a1 = r1.get_arity();
   int a2 = r2.get_arity();
+  if(constraint==FRIENDS && (a1==nj || a2 == nj)){
+    constraint=NONE;
+  }
   vector<vector<int> > newdata;
   vector<vector<int> *>::iterator it1 = r1.dataptr.begin();
   vector<vector<int> *>::iterator it2 = r2.dataptr.begin();
@@ -79,6 +85,10 @@ Relation::Relation(Relation &r1, Relation &r2, int *permu1, int *permu2,
       {
         for (int j = count2 - 1; j >= 0; j--)
         {
+          if(constraint==FRIENDS &&
+              (*(it1-i))->at(permu1[nj])==(*(it2-j))->at(permu2[nj])){
+                continue;
+          }
           vector<int> v = *(*(it1 - i));
           for (unsigned int k = nj; k < a2; k++)
           {
@@ -117,7 +127,7 @@ Relation::Relation(Relation &r1, Relation &r2, int *permu1, int *permu2,
 int Relation::getData(string filename)
 {
   ifstream file;
-  file.open(filename);
+  file.open(filename.c_str());
   if (!file.is_open())
     return 0;
   unsigned int h;

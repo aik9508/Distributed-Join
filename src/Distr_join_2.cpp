@@ -1,7 +1,6 @@
 #include <ctime>
 #include "Relation.hpp"
 #include "mpi.h"
-#include "math.h"
 
 vector<int> flatten_vector(vector<vector<int> *> &v0) {
   vector<int> v;
@@ -49,14 +48,14 @@ void get_scatter_v(Relation &rel, vector<int> &scatter_v, int const numtasks,
 
 void reconstruct_loc_vector(vector<vector<int> > &v, int *loc_data,
                             int const count, int const arity) {
-  int cp = v.capacity();
+  // int cp = v.capacity();
   for (unsigned int i = 0; i < count; i += arity) {
     vector<int> current_vector;
     for (unsigned int j = 0; j < arity; j++) {
       current_vector.push_back(loc_data[i + j]);
     }
     v.push_back(current_vector);
-    if(v.capacity()!=cp) {cout << "capacity : " << v.capacity() << endl;cp=v.capacity();}
+    // if(v.capacity()!=cp) {cout << "capacity : " << v.capacity() << endl;cp=v.capacity();}
   }
 }
 
@@ -135,8 +134,8 @@ int main(int argc, char **argv) {
               MPI_COMM_WORLD);
   MPI_Scatter(send_counts2, 1, MPI_INT, &loc_count2, 1, MPI_INT, root,
               MPI_COMM_WORLD);
-  int* loc_data1 = new int[loc_count1];
-  int* loc_data2 = new int[loc_count2];
+  int loc_data1[loc_count1];
+  int loc_data2[loc_count2];
   MPI_Scatterv(scatter_v1.data(), send_counts1, send_displ1, MPI_INT, loc_data1,
                loc_count1, MPI_INT, root, MPI_COMM_WORLD);
   MPI_Scatterv(scatter_v2.data(), send_counts2, send_displ2, MPI_INT, loc_data2,
@@ -144,51 +143,46 @@ int main(int argc, char **argv) {
   printf("node%d starts to join...\n", taskid);
   reconstruct_loc_vector(v1, loc_data1, loc_count1, arity1);
   reconstruct_loc_vector(v2, loc_data2, loc_count2, arity2);
-  delete[] loc_data1;
-  delete[] loc_data2;
-  Relation* loc_r1 = new Relation(v1);
-  Relation* loc_r2 = new Relation(v2);
-  Relation* res = new Relation(*loc_r1, *loc_r2, permu1, permu2, nj, true, NONE);
-  delete loc_r1;
-  delete loc_r2;
-  printf("node%d finished joining and found %d joins...\n", taskid, res->size());
-  vector<int> v_joined = flatten_vector(res->dataptr);
-  delete res;
+  Relation loc_r1(v1);
+  Relation loc_r2(v2);
+  Relation res(loc_r1, loc_r2, permu1, permu2, nj, true, NONE);
+  printf("node%d finished joining and found %d joins...\n", taskid, res.size());
+  vector<int> v_joined = flatten_vector(res.dataptr);
   int join_count = v_joined.size();
   int recv_counts[numtasks];
   MPI_Gather(&join_count, 1, MPI_INT, recv_counts, 1, MPI_INT, root,
              MPI_COMM_WORLD);
   int *array_gather;
+  int *displs;
+  int total_count = 0;
   if (taskid == root) {
-    int max_count=0;
-    int total_count=0;
+    displs = new int[numtasks];
     for (unsigned int i = 0; i < numtasks; i++) {
-      max_count = (int) fmax(max_count,recv_counts[i]);
-      total_count +=recv_counts[i];
+      displs[i] = total_count;
+      total_count += recv_counts[i];
     }
     printf("[%6.4f]recv_counts gather finished...\n",
            (double)(clock() - begin) / CLOCKS_PER_SEC);
-    array_gather = new int[max_count];
+    array_gather = new int[total_count];
+  }
+  MPI_Gatherv(v_joined.data(), join_count, MPI_INT, array_gather, recv_counts,
+              displs, MPI_INT, root, MPI_COMM_WORLD);
+  if (taskid == root) {
+    printf("[%6.4f]vector gather finished...\n",
+           (double)(clock() - begin) / CLOCKS_PER_SEC);
     vector<vector<int> > v_gather;
-    // v_gather.reserve(total_count/(arity1+arity2-nj));
-    reconstruct_loc_vector(v_gather, v_joined.data(), recv_counts[0],
+    reconstruct_loc_vector(v_gather, array_gather, total_count,
                             (arity1 + arity2 - nj));
-    for(unsigned int i = 1 ; i<numtasks ;i++){
-      MPI_Recv(array_gather,recv_counts[i],MPI_INT,i,i,MPI_COMM_WORLD,&status);
-      reconstruct_loc_vector(v_gather, array_gather, recv_counts[i],
-                            (arity1 + arity2 - nj));
-    }
-    delete[] array_gather;
     Relation res_gather(v_gather);
     printf("[%6.4f]final result (%lu joins):\n",
             (double)(clock() - begin) / CLOCKS_PER_SEC, v_gather.size());
     cout << res_gather << endl;
-  }else{
-    MPI_Send(v_joined.data(),join_count,MPI_INT,0,taskid,MPI_COMM_WORLD);
   }
   delete[] permu1;
   delete[] permu2;
   if (taskid == root) {
+    delete[] array_gather;
+    delete[] displs;
     delete[] send_displ1;
     delete[] send_displ2;
     delete[] send_counts1;
