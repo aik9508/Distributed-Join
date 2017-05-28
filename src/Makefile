@@ -52,13 +52,13 @@ multi_join_test5:
 	mpirun -np 4 Multi_join 6 4 "../test_commande/test_sm3.txt"
 
 hypercube_test1:
-	mpirun -np 8 HyperCube 3 3 3 2 4 1 "../test_commande/test_fb1.txt"
+	mpirun -np 8 HyperCube 3 3 2 4 1 "../test_commande/test_fb1.txt"
 
 hypercube_test2:
-	mpirun -np 8 HyperCube 3 3 3 2 2 2 "../test_commande/test_tw.txt"
+	mpirun -np 8 HyperCube 3 3 2 2 2 "../test_commande/test_tw.txt"
 
 hypercube_test3:
-	mpirun -np 8 HyperCube 3 3 3 2 2 2 "../test_commande/test_dblp.txt"
+	mpirun -np 8 HyperCube 3 3 2 2 2 "../test_commande/test_dblp.txt"
 
 hypercube_test4:
 	mpirun -np 16 HyperCube 4 4 2 2 2 2 "../test_commande/test_fb2.txt"

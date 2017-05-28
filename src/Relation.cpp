@@ -4,13 +4,13 @@ struct compare_data
 {
   compare_data(int arity, int *permu, bool asc)
       : arity(arity), permu(permu), asc(asc) {}
-  bool operator()(vector<int> *a, vector<int> *b)
+  bool operator()(int *a, int *b)
   {
     for (int i = 0; i < arity; i++)
     {
-      if (a->at(permu[i]) < b->at(permu[i]))
+      if (a[permu[i]] < b[permu[i]])
         return asc;
-      else if (a->at(permu[i]) > b->at(permu[i]))
+      else if (a[permu[i]] > b[permu[i]])
         return !asc;
     }
     return false;
@@ -27,23 +27,33 @@ Relation::Relation() {}
 Relation::Relation(string filename)
 {
   arity = getData(filename);
+  r_size = vector_data.size();
   getPtrData();
 }
 
-Relation::Relation(vector<vector<int> > &data) : data(data)
+Relation::Relation(vector<vector<int> > &data) : vector_data(data)
 {
-  arity = data.empty() ? 0 : data[0].size();
+  arity = data.empty() ? 0 :vector_data[0].size();
+  r_size = vector_data.size();
+  getPtrData();
+}
+
+Relation::Relation(int* data, int arity, int count){
+  this->arity = arity;
+  this->r_size = count/arity;
+  array_data=data;
   getPtrData();
 }
 
 Relation::~Relation() {
+  if(r_size!=0 && vector_data.empty()) delete[] array_data;
   dataptr.clear();
-  data.clear();
+  vector_data.clear();
 }
 
 int Relation::get_arity() const { return arity; }
 
-int Relation::size() const { return data.size(); }
+int Relation::size() const { return r_size; }
 
 void Relation::sort_data(int *permu, bool asc)
 {
@@ -62,8 +72,8 @@ Relation::Relation(Relation &r1, Relation &r2, int *permu1, int *permu2,
     constraint=NONE;
   }
   vector<vector<int> > newdata;
-  vector<vector<int> *>::iterator it1 = r1.dataptr.begin();
-  vector<vector<int> *>::iterator it2 = r2.dataptr.begin();
+  vector<int *>::iterator it1 = r1.dataptr.begin();
+  vector<int *>::iterator it2 = r2.dataptr.begin();
   int ind = 0;
   while (it1 != r1.dataptr.end() && it2 != r2.dataptr.end())
   {
@@ -86,13 +96,16 @@ Relation::Relation(Relation &r1, Relation &r2, int *permu1, int *permu2,
         for (int j = count2 - 1; j >= 0; j--)
         {
           if(constraint==FRIENDS &&
-              (*(it1-i))->at(permu1[nj])==(*(it2-j))->at(permu2[nj])){
+              *((*(it1-i))+permu1[nj])==*((*(it2-j))+permu2[nj])){
                 continue;
           }
-          vector<int> v = *(*(it1 - i));
+          vector<int> v;
+          for (unsigned int k = 0 ; k< a1;k++){
+            v.push_back(*((*(it1-i))+k));
+          }
           for (unsigned int k = nj; k < a2; k++)
           {
-            v.push_back((*(it2 - j))->at(permu2[k]));
+            v.push_back(*((*(it2-j))+permu2[k]));
           }
           if(constraint == TRIANGLE){
             bool b = true;
@@ -119,8 +132,9 @@ Relation::Relation(Relation &r1, Relation &r2, int *permu1, int *permu2,
       it1++;
     }
   }
-  data=newdata;
-  arity = data.empty() ? 0 : data[0].size();
+  vector_data=newdata;
+  arity = vector_data.empty() ? 0 : vector_data[0].size();
+  r_size = vector_data.size();
   getPtrData();
 }
 
@@ -156,7 +170,7 @@ int Relation::getData(string filename)
     }
     if (h < arity)
       break;
-    data.push_back(entry);
+    vector_data.push_back(entry);
   }
   file.close();
   return arity;
@@ -164,10 +178,17 @@ int Relation::getData(string filename)
 
 void Relation::getPtrData()
 {
-  for (vector<vector<int> >::iterator it = data.begin(); it != data.end();
-       it++)
-  {
-    dataptr.push_back(&(*it));
+  if(r_size==0) return;
+  if(!vector_data.empty()){
+    for (vector<vector<int> >::iterator it = vector_data.begin(); it != vector_data.end();
+        it++)
+    {
+      dataptr.push_back(it->data());
+    }
+  }else{
+    for (unsigned int i =0 ;i<r_size;i++){
+      dataptr.push_back(&array_data[i*arity]);
+    }
   }
 }
 
@@ -175,16 +196,16 @@ void Relation::getPtrData()
 * Compares if current line pointed by v1 and currnet line pointed by v2 can be
 * joined. If so, return 0.
 */
-int Relation::joinCompare(vector<int> *v1, vector<int> *v2, int *permu1,
+int Relation::joinCompare(int *v1, int *v2, int *permu1,
                           int *permu2, int nj)
 {
   for (unsigned int i = 0; i < nj; i++)
   {
-    if (v1->at(permu1[i]) < v2->at(permu2[i]))
+    if (v1[permu1[i]] < v2[permu2[i]])
     {
       return -1;
     }
-    else if (v1->at(permu1[i]) > v2->at(permu2[i]))
+    else if (v1[permu1[i]] > v2[permu2[i]])
     {
       return 1;
     }
@@ -199,7 +220,7 @@ std::ostream &operator<<(std::ostream &s, const Relation &d)
   {
     for (int j = 0; j < d.get_arity(); j++)
     {
-      s << d.dataptr[i]->at(j) << " ";
+      s << d.dataptr[i][j] << " ";
     }
     s << endl;
   }

@@ -15,14 +15,11 @@ void print_array(int *v, int sz)
 /*
 * Transforms a 2-dimension vectro into 1-dimension.
 */
-vector<int> flatten_vector(vector<vector<int> *> &v0)
-{
+vector<int> flatten_vector(vector<int *> &v0, int arity) {
   vector<int> v;
-  for (vector<vector<int> *>::iterator it = v0.begin(); it != v0.end(); it++)
-  {
-    for (int i = 0; i < (*it)->size(); i++)
-    {
-      v.push_back((*it)->at(i));
+  for (vector<int*>::iterator it = v0.begin(); it != v0.end(); it++) {
+    for (int i = 0; i < arity; i++) {
+      v.push_back(*((*it)+i));
     }
   }
   return v;
@@ -31,20 +28,20 @@ vector<int> flatten_vector(vector<vector<int> *> &v0)
 * Distributes data lines to different processors according to the module of
 * the key column to the number of processors.
 */
-vector<vector<vector<int> *> > distribute_vector(Relation &rel,
+vector<vector<int *> >distribute_vector(Relation &rel,
                                                 int const numtasks,
                                                 int *permu)
 {
-  vector<vector<vector<int> *> > distr;
+  vector<vector<int *> > distr;
   for (unsigned int i = 0; i < numtasks; i++)
   {
-    vector<vector<int> *> tmp;
+    vector<int *> tmp;
     distr.push_back(tmp);
   }
-  for (vector<vector<int> *>::iterator it = rel.dataptr.begin();
+  for (vector<int *>::iterator it = rel.dataptr.begin();
        it != rel.dataptr.end(); it++)
   {
-    int dest = (*it)->at(permu[0]) % numtasks;
+    int dest = *((*it)+permu[0]) % numtasks;
     distr[dest].push_back(*it);
   }
   return distr;
@@ -68,7 +65,7 @@ void get_scatter_v(Relation &rel, vector<int> &scatter_v, int const numtasks,
   if (rel.size() == 0)
     return;
   // Here produces 'std::out_of_range' error
-  vector<vector<vector<int> *> > distr = distribute_vector(rel, numtasks, permu);
+  vector<vector<int *> > distr = distribute_vector(rel, numtasks, permu);
   for (unsigned int i = 0; i < numtasks; i++)
   {
     send_counts[i] = distr[i].size() * arity;
@@ -77,7 +74,7 @@ void get_scatter_v(Relation &rel, vector<int> &scatter_v, int const numtasks,
       for (unsigned int k = 0; k < arity; k++)
       {
         scatter_v.push_back(
-            distr[i][j]->at(k)); // processor i, line j, k-th integer
+            distr[i][j][k]); // processor i, line j, k-th integer
       }
     }
   }
@@ -333,8 +330,7 @@ int main(int argc, char **argv)
   Relation *loc_relations[num_files*2-2];
   for (unsigned int l = 0; l < num_files; l++)
   {
-    reconstruct_loc_vector(vs[l], local_datas[l], local_counts[l], arities[l]);
-    loc_relations[l] = new Relation(vs[l]);
+    loc_relations[l]=new Relation(local_datas[l],arities[l],local_counts[l]);
   }
 
   Relation *res = loc_relations[0];
@@ -377,16 +373,12 @@ int main(int argc, char **argv)
     printf ("[%6.4f]node%d join %d All to all v communication\n",(double)(clock() - begin) / CLOCKS_PER_SEC, taskid, i);
     MPI_Alltoallv(scatter_v_inters[i].data(), send_count_inter, send_displ_inter, MPI_INT,
                   loc_data_inter, recv_count_inter, recv_displ_inter, MPI_INT, MPI_COMM_WORLD);
-    printf ("[%6.4f]node%d join %d reconstruct the vector\n",(double)(clock() - begin) / CLOCKS_PER_SEC, taskid, i);
-    reconstruct_loc_vector(v_inters[i], loc_data_inter, loc_count_inter, counts[i+num_files]);
-    delete[] loc_data_inter;
-    printf ("[%6.4f]node%d join %d reconstruction is finished\n",(double)(clock() - begin) / CLOCKS_PER_SEC, taskid, i);
-    res = new Relation(v_inters[i]);
+    res = new Relation(loc_data_inter,counts[i+num_files],loc_count_inter);
     printf ("[%6.4f]node%d join %d found %d intermediate results\n",(double)(clock() - begin) / CLOCKS_PER_SEC, taskid, i, res->size());
     loc_relations[num_files+i]=res;
   }
   printf("[%6.4f]node%d finished joining and found %d joins...\n",(double)(clock() - begin) / CLOCKS_PER_SEC, taskid, res->size());
-  vector<int> v_joined = flatten_vector(res->dataptr);
+  vector<int> v_joined = flatten_vector(res->dataptr,res->get_arity());
   int join_count = v_joined.size();
   int recv_counts[numtasks];
 
@@ -412,11 +404,9 @@ int main(int argc, char **argv)
   if (taskid == root) {
     printf("[%6.4f]vector gather finished...\n",
            (double)(clock() - begin) / CLOCKS_PER_SEC);
-    vector<vector<int> > v_gather;
-    reconstruct_loc_vector(v_gather, array_gather, total_count, final_dim);
-    Relation res_gather(v_gather);
-    printf("[%6.4f]final result (%lu joins) :\n",
-           (double)(clock() - begin) / CLOCKS_PER_SEC, v_gather.size());
+    Relation res_gather(array_gather,final_dim,total_count);
+    printf("[%6.4f]final result (%d joins) :\n",
+           (double)(clock() - begin) / CLOCKS_PER_SEC, res_gather.size());
     cout << res_gather << endl;
   }
   delete[] arities;
@@ -432,7 +422,6 @@ int main(int argc, char **argv)
   delete[] join_order;
   if(taskid==root){
     delete[] displs;
-    delete[] array_gather;
     delete_vector(tuples);
   }
   delete_vector(send_displs);

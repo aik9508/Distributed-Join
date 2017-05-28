@@ -11,11 +11,11 @@ int mpi_hash(int a){
     return a;
 }
 
-vector<int> flatten_vector(vector<vector<int> *> &v0) {
+vector<int> flatten_vector(vector<int *> &v0, int arity) {
   vector<int> v;
-  for (vector<vector<int> *>::iterator it = v0.begin(); it != v0.end(); it++) {
-    for (int i = 0; i < (*it)->size(); i++) {
-      v.push_back((*it)->at(i));
+  for (vector<int*>::iterator it = v0.begin(); it != v0.end(); it++) {
+    for (int i = 0; i < arity; i++) {
+      v.push_back(*((*it)+i));
     }
   }
   return v;
@@ -35,7 +35,7 @@ void print_array(int *v, int sz) {
   cout << endl;
 }
 
-void distribute_vector_ (vector<vector<vector<int> *> > & distr, vector<int> * to_insert, int *m, int* weight, vector<int> &var_pos, int dest, int count){
+void distribute_vector_ (vector<vector<int *> > & distr, int * to_insert, int *m, int* weight, vector<int> &var_pos, int dest, int count){
   if(count == var_pos.size()-1){
     for(unsigned int i=0;i<m[var_pos[count]];i++){
       distr[dest].push_back(to_insert);
@@ -49,10 +49,10 @@ void distribute_vector_ (vector<vector<vector<int> *> > & distr, vector<int> * t
   }
 }
 
-vector<vector<vector<int> *> > distribute_vector(Relation &rel, int const numtasks, int* m, int const len, int *pos) {
+vector<vector<int *> > distribute_vector(Relation &rel, int const numtasks, int* m, int const len, int *pos) {
   //print_array(pos,len);
 
-  vector<vector<vector<int> *> > distr;
+  vector<vector<int *> > distr;
   int weight[len];
   weight[0]=1;
   for (unsigned int i =1 ;i <len;i++){
@@ -67,11 +67,11 @@ vector<vector<vector<int> *> > distribute_vector(Relation &rel, int const numtas
   //print_vector(var_pos);
   //print_vector(invar_pos);
   for (unsigned int i = 0; i < numtasks; i++) {
-    vector<vector<int> *> tmp;
+    vector<int *> tmp;
     distr.push_back(tmp);
   }
   //int count =0;
-  for (vector<vector<int> *>::iterator it = rel.dataptr.begin();
+  for (vector<int *>::iterator it = rel.dataptr.begin();
        it != rel.dataptr.end(); it++) {
     int p[len];
     for(unsigned int i = 0 ;i<var_pos.size();i++){
@@ -79,7 +79,7 @@ vector<vector<vector<int> *> > distribute_vector(Relation &rel, int const numtas
     }
     int dest = 0;
     for(unsigned int i = 0; i<invar_pos.size();i++){
-        p[invar_pos[i]]=mpi_hash((*it)->at(pos[invar_pos[i]]))%m[invar_pos[i]];
+        p[invar_pos[i]]=mpi_hash(*((*it)+pos[invar_pos[i]]))%m[invar_pos[i]];
     }
     for(unsigned int i = 0; i<len ;i++){
         dest += p[i]*weight[i];
@@ -97,13 +97,13 @@ vector<vector<vector<int> *> > distribute_vector(Relation &rel, int const numtas
 
 void get_scatter_v(Relation &rel, vector<int> &scatter_v, int const numtasks,
                    int const arity,int* m, int const len,int *pos, int *displ, int *send_counts) {
-  vector<vector<vector<int> *> > distr =
+  vector<vector<int*> > distr =
       distribute_vector(rel, numtasks, m,len, pos);
   for (unsigned int i = 0; i < numtasks; i++) {
     send_counts[i] = distr[i].size() * arity;
     for (unsigned int j = 0; j < distr[i].size(); j++) {
       for (unsigned int k = 0; k < arity; k++) {
-        scatter_v.push_back(distr[i][j]->at(k));
+        scatter_v.push_back(distr[i][j][k]);
       }
     }
   }
@@ -350,10 +350,8 @@ int main(int argc, char **argv) {
   Relation *loc_relations[num_files*2-1];
   for (unsigned int l = 0; l < num_files; l++)
   {
-    reconstruct_loc_vector(vs[l], local_datas[l], local_counts[l], arities[l]);
-    loc_relations[l] = new Relation(vs[l]);
+    loc_relations[l]=new Relation(local_datas[l],arities[l],local_counts[l]);
   }
-  delete_vector (local_datas);
   Relation *res = loc_relations[0];
   for(unsigned int i =0 ;i<num_files-1;i++){
     int src=join_order[i][0];
@@ -371,7 +369,7 @@ int main(int argc, char **argv) {
     printf ("node%d join %d finished (%d intermediate results)\n", taskid, i, res->size());
   }
   printf("node%d finished joining and found %d joins...\n", taskid, res->size());
-  vector<int> v_joined = flatten_vector(res->dataptr);
+  vector<int> v_joined = flatten_vector(res->dataptr, res->get_arity());
   int join_count = v_joined.size();
   int recv_counts[numtasks];
   MPI_Gather(&join_count, 1, MPI_INT, recv_counts, 1, MPI_INT, root,
@@ -394,11 +392,9 @@ int main(int argc, char **argv) {
   if (taskid == root) {
     printf("[%6.4f]vector gather finished...\n",
            (double)(clock() - begin) / CLOCKS_PER_SEC);
-    vector<vector<int> > v_gather;
-    reconstruct_loc_vector(v_gather, array_gather, total_count,final_dim);
-    Relation res_gather(v_gather);
-    printf("[%6.4f]final result (%lu joins) :\n",
-           (double)(clock() - begin) / CLOCKS_PER_SEC, v_gather.size());
+    Relation res_gather(array_gather,final_dim,total_count);
+    printf("[%6.4f]final result (%d joins) :\n",
+           (double)(clock() - begin) / CLOCKS_PER_SEC, res_gather.size());
     cout << res_gather << endl;
   }
   delete[] arities;
@@ -414,7 +410,6 @@ int main(int argc, char **argv) {
   delete[] join_order;
   if(taskid==root){
     delete[] displs;
-    delete[] array_gather;
     delete_vector(tuples);
   }
   delete_vector(send_displs);

@@ -17,7 +17,7 @@ using namespace std;
 
 class Relation {
  public:
-  vector<vector<int> *> dataptr;
+  vector<int *> dataptr;
 
   Relation();
 
@@ -30,6 +30,8 @@ class Relation {
   * Reads relations from a well-formated vector.
   */
   Relation(vector<vector<int> > &data);
+  
+  Relation(int* data, int arity, int count);
 
   Relation(Relation &r1, Relation &r2, int *permu1, int *permu2,
                         int nj, bool asc, int constraint);
@@ -48,10 +50,12 @@ class Relation {
 
  private:
   int arity;
-  vector<vector<int> > data;
+  vector<vector<int> > vector_data;
+  int r_size;
+  int* array_data;
   int getData(string filename);
   void getPtrData();
-  static int joinCompare(vector<int> *v1, vector<int> *v2, int *permu1,
+  static int joinCompare(int *v1, int *v2, int *permu1,
                          int *permu2, int nj);
 };
 
