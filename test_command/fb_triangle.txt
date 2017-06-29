@@ -1,0 +1,5 @@
+0 1
+3 2
+../data/facebook.dat 2 0 1
+../data/facebook.dat 2 1 2
+../data/facebook.dat 2 2 0
