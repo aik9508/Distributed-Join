@@ -1,0 +1,3 @@
+0 1
+../data/dblp.dat 2 0 1
+../data/dblp.dat 2 1 2
