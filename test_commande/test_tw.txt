@@ -1,5 +1,0 @@
-0 1
-3 2
-../data/twitter.dat 2 0 1
-../data/twitter.dat 2 1 2
-../data/twitter.dat 2 2 0

@@ -1,7 +1,0 @@
-0 1
-2 3
-4 5
-../data/facebook.dat 2 0 1
-../data/facebook.dat 2 1 2
-../data/facebook.dat 2 2 3
-../data/facebook.dat 2 3 0

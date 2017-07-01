@@ -1,7 +1,0 @@
-0 1
-2 3
-4 5
-../data/data1.txt 2 0 1
-../data/data1.txt 2 1 2
-../data/data1.txt 2 2 3
-../data/data1.txt 2 3 0
