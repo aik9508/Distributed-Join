@@ -1,80 +1,93 @@
 CC = g++
 
-Distr_join.o: Relation.hpp Relation.cpp
-	mpic++ -c Relation.cpp -o Distr_join.o
+default: All
 
-Distr_join: Distr_join.o Distr_join.cpp
-	mpic++ Distr_join.o Distr_join.cpp -o Distr_join
+Relation.o: Relation.hpp Relation.cpp
+	$(CC) -c Relation.cpp -o Relation.o
+	
+utils.o: utils.hpp utils.cpp Relation.o
+	$(CC) -c utils.cpp -o utils.o
 
-HyperCube.o: Relation.hpp Relation.cpp
-	mpic++ -c Relation.cpp -o HyperCube.o
+Seq_join: utils.o Relation.o Seq_join.cpp
+	$(CC) Relation.o utils.o Seq_join.cpp -o Seq_join
 
-HyperCube: HyperCube.o HyperCube.cpp
-	mpic++ HyperCube.o HyperCube.cpp -o HyperCube
+Distr_join: utils.o Distr_join.cpp Relation.o
+	mpic++ Relation.o utils.o Distr_join.cpp -o Distr_join
 
-Multi_join.o: Relation.hpp Relation.cpp
-	mpic++ -c Relation.cpp -o Multi_join.o
+Hypercube: utils.o Relation.o HyperCube.cpp
+	mpic++ Relation.o utils.o HyperCube.cpp -o HyperCube
 
-Multi_join: Multi_join.o Multi_join.cpp
-	mpic++ Multi_join.o Multi_join.cpp -o Multi_join
+Multi_join: utils.o Relation.o Multi_join.cpp
+	mpic++ Relation.o utils.o Multi_join.cpp -o Multi_join
 
-test_sequential.o: Relation.hpp Relation.cpp
-	$(CC) -c Relation.cpp -o test_sequential.o
+All: Relation.hpp Relation.cpp utils.hpp utils.cpp Seq_join.cpp Distr_join.cpp Multi_join.cpp HyperCube.cpp
+	$(CC) -c Relation.cpp -o Relation.o
+	$(CC) -c utils.cpp -o utils.o
+	$(CC) Relation.o utils.o Seq_join.cpp -o Seq_join
+	mpic++ Relation.o utils.o Multi_join.cpp -o Multi_join
+	mpic++ Relation.o utils.o Distr_join.cpp -o Distr_join
+	mpic++ Relation.o utils.o HyperCube.cpp -o HyperCube	
 
-test_sequential: test_sequential.o test_sequential.cpp
-	$(CC) test_sequential.o test_sequential.cpp -o test_sequential
+seq_join_test:
+	./Seq_join "../data/data.txt" 2 0 1 "../data/data.txt" 2 1 2
 
-test1: 
-	mpirun -np 4 Distr_join "../data/facebook.dat" "../data/facebook.dat"
+seq_join_fb:
+	./Seq_join "../data/facebook.dat" 2 0 1 "../data/facebook.dat" 2 1 2
 
-test2:
-	mpirun -np 2 Distr_join "../data/twitter.dat" "../data/twitter.dat"
+distr_join_test_loc:
+	mpirun -np 4 Distr_join "../data/data.txt" 2 0 1 "../data/data.txt" 2 1 2
 
-test3:
-	mpirun -np 4 Distr_join "../data/dblp.dat" "../data/dblp.dat"
+distr_join_fb_loc: 
+	mpirun -np 4 Distr_join "../data/facebook.dat" 2 0 1 "../data/facebook.dat" 2 1 2
 
-test4:
-	mpirun -np 4 Distr_join "../data/data3.txt" "../data/data3.txt"
+distr_join_tw_loc:
+	mpirun -np 4 Distr_join "../data/twitter.dat" 2 0 1 "../data/twitter.dat" 2 1 2
 
-multi_join_test1:
-	mpirun -np 8 Multi_join 4 4 "../test_commande/test_fb2.txt"
+distr_join_db_loc:
+	mpirun -np 4 Distr_join "../data/dblp.dat" 2 0 1 "../data/dblp.dat" 2 1 2
 
-multi_join_test2:
-	mpirun -np 4 Multi_join 3 3 "../test_commande/test_fb1.txt"
+distr_join_fb: 
+	salloc --ntasks=4 --ntasks-per-node=1 mpirun Distr_join "../data/facebook.dat" 2 0 1 "../data/facebook.dat" 2 1 2
 
-multi_join_test3:
-	mpirun -np 8 Multi_join 3 3 "../test_commande/test_tw.txt"
+distr_join_tw:
+	salloc --ntasks=4 --ntasks-per-node=1 mpirun Distr_join "../data/twitter.dat" 2 0 1 "../data/twitter.dat" 2 1 2
 
-multi_join_test4:
-	mpirun -np 8 Multi_join 3 3 "../test_commande/test_dblp.txt"
+distr_join_db:
+	salloc --ntasks=4 --ntasks-per-node=1 mpirun Distr_join "../data/dblp.dat" 2 0 1 "../data/dblp.dat" 2 1 2
 
-multi_join_test5:
-	mpirun -np 4 Multi_join 6 4 "../test_commande/test_sm3.txt"
+multi_join_fb_loc:
+	mpirun -np 6 Multi_join 3 3 "../test_command/fb_triangle.txt"
 
-hypercube_test1:
-	mpirun -np 8 HyperCube 3 3 2 4 1 "../test_commande/test_fb1.txt"
+multi_join_tw_loc:
+	mpirun -np 6 Multi_join 3 3 "../test_command/tw_triangle.txt"
 
-hypercube_test2:
-	mpirun -np 8 HyperCube 3 3 2 2 2 "../test_commande/test_tw.txt"
+multi_join_db_loc:
+	mpirun -np 6 Multi_join 3 3 "../test_command/db_triangle.txt"
 
-hypercube_test3:
-	mpirun -np 8 HyperCube 3 3 2 2 2 "../test_commande/test_dblp.txt"
+multi_join_fb:
+	salloc --ntasks=8 --ntasks-per-node=1 mpirun Multi_join 3 3 "../test_command/fb_triangle.txt"
 
-hypercube_test4:
-	mpirun -np 16 HyperCube 4 4 2 2 2 2 "../test_commande/test_fb2.txt"
+multi_join_tw:
+	salloc --ntasks=8 --ntasks-per-node=1 mpirun Multi_join 3 3 "../test_command/tw_triangle.txt"
 
-hypercube_test5:
-	mpirun -np 16 HyperCube 4 4 2 2 2 2 "../test_commande/test_sm1.txt"
+multi_join_db:
+	salloc --ntasks=8 --ntasks-per-node=1 mpirun Multi_join 3 3 "../test_command/db_triangle.txt"
 
-hypercube_test6:
-	mpirun -np 32 HyperCube 5 5 2 2 2 2 2 "../test_commande/test_sm2.txt"
+hypercube_fb:
+	salloc --ntasks=8 --ntasks-per-node=1 mpirun HyperCube 3 3 2 2 2 "../test_command/fb_triangle.txt"
 
-hypercube_test7:
-	mpirun -np 16 HyperCube 6 4 2 2 2 2 "../test_commande/test_sm3.txt"
+hypercube_tw:
+	salloc --ntasks=8 --ntasks-per-node=1 mpirun HyperCube 3 3 2 2 2 "../test_command/tw_triangle.txt"
 
-create_data: create_data.cpp
-	$(CC) create_data.cpp -o create_data
+hypercube_db:
+	salloc --ntasks=8 --ntasks-per-node=1 mpirun HyperCube 3 3 2 2 2 "../test_command/db_triangle.txt"
+
+hypercube_fb4:
+	salloc --ntasks=64 --ntasks-per-node=2 mpirun HyperCube 6 4 2 4 2 4 "../test_command/fb_4complet.txt"
+
+hypercube_db4:
+	salloc --ntasks=64 --ntasks-per-node=2 mpirun HyperCube 6 4 2 4 2 4 "../test_command/db_4complet.txt"
 
 clean:
-	rm -f Distr_join create_data HyperCube Relation Multi_join test_sequential *.o
+	rm -f Relation Seq_join Distr_join Multi_join HyperCube *.o
 
